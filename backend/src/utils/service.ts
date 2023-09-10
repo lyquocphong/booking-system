@@ -1,6 +1,4 @@
 import { Service, ServiceSchedule } from "@/entities";
-import { Booking } from "@prisma/client";
-import * as moment from 'moment';
 
 /**
  * Get default service
@@ -15,6 +13,7 @@ export const getDefaultService = (): Service => {
         [
             new ServiceSchedule(0, true, '09:00', '17:00'),
             new ServiceSchedule(1, true, '09:00', '17:00'),
+            new ServiceSchedule(2, true, '11:00', '17:00'),
             new ServiceSchedule(6, true, '09:00', '17:00'),
         ]
     );
