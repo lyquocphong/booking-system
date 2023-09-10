@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, BadRequestException, Put } from '@nestjs/common';
 import { BookingService } from './booking.service';
-import { ApiBadRequestResponse, ApiOkResponse, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBadRequestResponse, ApiOkResponse, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetAvailableSlotsDto, GetAvailableSlotsResponse } from './dto/get-available-slots.dto';
 import * as moment from 'moment-timezone';
 import { convertToTimezone, formatDate, validateDateRange } from '@/utils/date';
@@ -28,6 +28,17 @@ export class BookingController {
   async reserve(@Body() createBookingDto: ReserveBookingDto): Promise<BookingResponse> {
     const service = getDefaultService();
     const booking = await this.bookingService.reserve(service, createBookingDto);
+    return BookingResponse.fromBooking(booking);
+  }
+
+  @Put(':identifier/confirm')
+  @ApiParam({
+    name: 'identifier',
+    required: true,
+    type: String
+  })
+  async confirm(@Param('identifier') identifier: string): Promise<BookingResponse> {
+    const booking = await this.bookingService.confirm(identifier);
     return BookingResponse.fromBooking(booking);
   }
 
