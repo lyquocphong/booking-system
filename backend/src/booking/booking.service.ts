@@ -167,14 +167,6 @@ export class BookingService {
     const availableSlots: Record<string, BookingSlot[]> = {};
 
     while (currentDate.isSameOrBefore(toDate)) {
-      const dayOfWeek = currentDate.weekday();
-      const schedule = service.getSchedule(dayOfWeek);
-
-      // If the service is not available in current date
-      if (!schedule || !schedule.enabled) {        
-        currentDate = moment(currentDate).add(1, 'day');
-        continue;
-      }
 
       let bookedSlots = await this.findByRange(currentDate, currentDate, select, condition);      
 

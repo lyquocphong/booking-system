@@ -152,12 +152,9 @@ export class Service {
         const dayOfWeek = date.weekday();
         const schedule = this.getSchedule(dayOfWeek);
 
-        if (!schedule || !schedule.enabled) {
-            console.log('Service is not enabled');
+        if (!schedule || !schedule.enabled) {            
             return [];
         }
-
-        console.log(`Duration ${this.duration}`);
 
         const scheduleFrom = this.getTimezoneDateTime(date, schedule.from);
         const scheduleTo = this.getTimezoneDateTime(date, schedule.to);
