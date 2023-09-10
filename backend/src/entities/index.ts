@@ -92,7 +92,7 @@ export class Service {
         // Sort booked slots by start time
         const sortedBooked = booked.slice().sort((a, b) => moment(a.startTime).isBefore(moment(b.startTime)) ? -1 : 1);
 
-        const freetime: {from: Moment, to:Moment}[] = [];
+        const freetime: { start: Moment, end: Moment }[] = [];
         const availableSlots: BookingSlot[] = [];
 
         let currentTime = scheduleFrom.clone();
@@ -109,8 +109,8 @@ export class Service {
                 if (gap >= this.duration) {
                     // Add an available slot if the gap is long enough, add from current to start of booking
                     freetime.push({
-                        from: currentTime,
-                        to: bookingStart
+                        start: currentTime,
+                        end: bookingStart
                     })
                 }
 
@@ -125,22 +125,25 @@ export class Service {
         if (finalGap >= this.duration) {
             // Add an available slot if the gap is long enough, add from current to start of booking
             freetime.push({
-                from: currentTime,
-                to: currentTime.clone().add(finalGap, 'minutes')
+                start: currentTime,
+                end: currentTime.clone().add(finalGap, 'minutes')
             })
         }
-        
+
         freetime.forEach(slot => {
-            let start = moment(slot.from).clone();
+            let start = moment(slot.start).clone();
             let end = null;
 
-            while(start.isBefore(slot.to)) {
+            while (start.isBefore(slot.end)) {
                 end = start.clone().add(this.duration, 'minutes');
-                availableSlots.push(new BookingSlot(
-                    start.clone().format('HH:mm'),
-                    end.clone().format('HH:mm'),
-                ));
-                
+
+                if (end.isBefore(slot.end)) {
+                    availableSlots.push(new BookingSlot(
+                        start.clone().format('HH:mm'),
+                        end.clone().format('HH:mm'),
+                    ));
+                }
+
                 start = end.clone();
             }
         })
@@ -152,7 +155,8 @@ export class Service {
         const dayOfWeek = date.weekday();
         const schedule = this.getSchedule(dayOfWeek);
 
-        if (!schedule || !schedule.enabled) {            
+        if (!schedule || !schedule.enabled) {
+            console.log('dayOfWeek', dayOfWeek, schedule);
             return [];
         }
 
