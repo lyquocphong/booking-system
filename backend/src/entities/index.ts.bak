@@ -1,0 +1,210 @@
+import { BookingSlot } from "@/booking/dto/get-available-slots.dto";
+import { convertToTimezone, formatDate, getDefaultTimezone, getInfoFromTimeString, isValidTimeString } from "@/utils/date";
+import { ApiProperty } from "@nestjs/swagger";
+import { Booking } from "@prisma/client";
+import { Type } from "class-transformer";
+import * as moment from "moment";
+import { Moment } from "moment";
+
+export class ServiceSchedule {
+    enabled: boolean;
+    from: string;
+    to: string;
+    dateOfWeek: number;
+
+    constructor(dayOfWeek: number, enabled: boolean, from: string, to: string) {
+        this.dateOfWeek = dayOfWeek;
+        this.enabled = enabled;
+        this.from = from;
+        this.to = to;
+    }
+
+    validate(): boolean {
+        if (this.dateOfWeek < 0 || this.dateOfWeek > 6) {
+            throw new Error('Invalid day of week');
+        }
+
+        if (!isValidTimeString(this.from) || !isValidTimeString(this.to)) {
+            throw new Error('Invalid time string');
+        }
+
+        return true;
+    }
+}
+
+type BookingHasOnlyStartAndEndTime = Pick<Booking, 'startTime' | 'endTime'>;
+
+export class Service {
+    @ApiProperty()
+    name: string;
+
+    @ApiProperty()
+    price: number;
+
+    @ApiProperty()
+    duration: number
+
+    @Type(() => ServiceSchedule)
+    schedule: ServiceSchedule[]
+
+    constructor(
+        name: string,
+        price: number,
+        duration: number,
+        schedule: ServiceSchedule[]
+    ) {
+        this.name = name;
+        this.price = price;
+        this.duration = duration;
+        this.schedule = schedule;
+    }
+
+    getSchedule(dayOfWeek: number): ServiceSchedule | undefined {
+        return this.schedule.find(schedule => schedule.dateOfWeek === dayOfWeek);
+    }
+
+    canBook(booking: { startTime: Moment, endTime: Moment }, booked: BookingHasOnlyStartAndEndTime[]): boolean {
+        const { startTime, endTime } = booking;
+        const defaultTimezone = getDefaultTimezone()
+        const date = startTime.clone().tz(defaultTimezone);
+
+        const availableSlots = this.getDayAvailableSlots(date, booked);
+
+        if (booked.length === 0) {
+            return true;
+        }
+
+        // Check if the booking can fit within available slots
+        const canFitBooking = availableSlots.some(slot => {
+            const [fromHour, fromMinute] = getInfoFromTimeString(slot.from);
+            const [toHour, toMinute] = getInfoFromTimeString(slot.to);
+            const slotStartTime = moment(date).tz(defaultTimezone).set({ hour: fromHour, minute: fromMinute });
+            const slotEndTime = moment(date).tz(defaultTimezone).set({ hour: toHour, minute: toMinute });
+            
+            return startTime.isSameOrAfter(slotStartTime) && endTime.isSameOrBefore(slotEndTime);
+        });
+
+        return canFitBooking
+    }
+
+    private getAvailableSlots = (date: Moment, fromTime: Moment, toTime: Moment, booked: BookingHasOnlyStartAndEndTime[]) => {
+        const dayOfWeek = fromTime.weekday();
+        const schedule = this.getSchedule(dayOfWeek);
+
+        // If the service is not available in current date
+        if (!schedule || !schedule.enabled) {
+            console.log('Service is not enabled')
+            return [];
+        }
+
+        console.log(`Duration ${this.duration}`)
+
+
+        // create start and end time from date and duration from service
+        const [fromHour, fromMinute] = getInfoFromTimeString(schedule.from);
+        const [toHour, toMinute] = getInfoFromTimeString(schedule.to);
+
+        const defaultTimezone = getDefaultTimezone()
+
+        // We need to set hardcode the timezone to default timezone
+        const scheduleFrom = moment(date).tz(defaultTimezone).set({ hour: fromHour, minute: fromMinute });
+        const scheduleTo = moment(date).tz(defaultTimezone).set({ hour: toHour, minute: toMinute });
+
+        // In case from or to is out of range
+        if (toTime.isAfter(scheduleTo) || fromTime.isBefore(scheduleFrom)) {
+            console.log('Out of range')
+            return [];
+        }
+
+        // Initialize available slots array
+        const availableSlots: BookingSlot[] = [];
+        let timeframeMoved: boolean = false;
+        console.log(booked)
+
+        // Loop through the schedule time slots
+        while (fromTime.isBefore(toTime)) {
+
+            // Calculate the end time of the slot based on duration
+            let endTime = fromTime.clone().add(this.duration, 'minutes');
+            console.log(fromTime, toTime, endTime)
+
+            if (timeframeMoved) {
+                timeframeMoved = false;
+            }
+
+            if (endTime.isAfter(toTime)) {
+                console.log('isSlotAvailable', endTime, toTime)
+            }
+
+            if (endTime.isBefore(toTime)) {
+
+                console.log('isSlotAvailable', 32)
+
+                // Check if the slot is available (not booked)
+                const isSlotAvailable = !booked.some((booking) => {                    
+                    const bookingStart = convertToTimezone(booking.startTime);
+                    const bookingEnd = convertToTimezone(booking.endTime);
+
+                    const isOverlap =
+                        (bookingStart.isBefore(endTime) && bookingEnd.isAfter(fromTime))
+
+                    if (isOverlap) {
+                        console.log('Overlap')
+                        fromTime = bookingEnd.clone().startOf('hour').add(Math.ceil(bookingEnd.minute() / 15) * 15, 'minutes');;
+                        endTime = fromTime.clone().add(this.duration, 'minutes');
+                        timeframeMoved = true
+                    }
+
+                    return isOverlap;
+                });
+
+                console.log('isSlotAvailable', isSlotAvailable)
+
+                // If the slot is available, add it to the availableSlots array
+                if (isSlotAvailable) {
+                    const roundedTime = fromTime.clone().startOf('hour').add(Math.ceil(fromTime.minute() / 15) * 15, 'minutes');
+                    availableSlots.push(new BookingSlot(
+                        formatDate(convertToTimezone(roundedTime.toDate()), 'HH:mm'),
+                        formatDate(convertToTimezone(roundedTime.clone().add(this.duration, 'minutes').toDate()), 'HH:mm')
+                    ));
+
+                    fromTime = roundedTime.clone()
+                }
+            }
+
+            if (timeframeMoved) {
+                continue;
+            }
+
+            // Move to the next time slot
+            fromTime.add(this.duration, 'minutes');
+        }
+        console.log(availableSlots)
+        return availableSlots;
+    }
+
+    getDayAvailableSlots = (date: Moment, booked: BookingHasOnlyStartAndEndTime[]) => {
+        const dayOfWeek = date.weekday();
+        const schedule = this.getSchedule(dayOfWeek);
+
+        // If the service is not available in current date
+        if (!schedule || !schedule.enabled) {
+            console.log('Service is not enabled')
+            return [];
+        }
+
+        console.log(`Duration ${this.duration}`)
+
+        // create start and end time from date and duration from service
+        const [fromHour, fromMinute] = getInfoFromTimeString(schedule.from);
+        const [toHour, toMinute] = getInfoFromTimeString(schedule.to);
+
+        const defaultTimezone = getDefaultTimezone()
+
+        // We need to set hardcode the timezone to default timezone
+        const fromTime = moment(date).tz(defaultTimezone).set({ hour: fromHour, minute: fromMinute });
+        const toTime = moment(date).tz(defaultTimezone).set({ hour: toHour, minute: toMinute });
+
+        return this.getAvailableSlots(date, fromTime, toTime, booked);
+    }
+}
