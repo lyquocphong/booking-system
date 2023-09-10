@@ -77,15 +77,13 @@ export class Service {
         const schedule = this.getSchedule(dayOfWeek);
 
         if (!schedule || !schedule.enabled) {
-            console.log('Service is not enabled');
             return [];
         }
 
         const scheduleFrom = this.getTimezoneDateTime(date, schedule.from);
         const scheduleTo = this.getTimezoneDateTime(date, schedule.to);
 
-        if (toTime.isAfter(scheduleTo) || fromTime.isBefore(scheduleFrom)) {
-            console.log('Out of range');
+        if (toTime.isAfter(scheduleTo) || fromTime.isBefore(scheduleFrom)) {            
             return [];
         }
 
@@ -156,7 +154,6 @@ export class Service {
         const schedule = this.getSchedule(dayOfWeek);
 
         if (!schedule || !schedule.enabled) {
-            console.log('dayOfWeek', dayOfWeek, schedule);
             return [];
         }
 
