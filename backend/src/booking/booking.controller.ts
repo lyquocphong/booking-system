@@ -14,14 +14,10 @@ export class BookingController {
   constructor(private readonly bookingService: BookingService) { }
 
   @Get()
-  async findAll() {
+  async findAll(): Promise<BookingResponse[]> {
     const bookings = await this.bookingService.findAll();
 
-    return bookings.map(booking => ({
-      ...booking,
-      startTime: formatDate(convertToTimezone(booking.startTime)),
-      endTime: formatDate(convertToTimezone(booking.endTime))
-    }));
+    return bookings.map(booking => BookingResponse.fromBooking(booking));
   }
 
   @Post('reserve')
